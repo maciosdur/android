@@ -1,10 +1,11 @@
 package com.example.coach
 
-import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
@@ -15,10 +16,11 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
@@ -30,11 +32,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.coach.data.AppDatabase
 import com.example.coach.data.Player
 import com.example.coach.data.PlayerRepository
 import com.example.coach.ui.screens.AddPlayerScreen
 import com.example.coach.ui.screens.PlayerListScreen
 import com.example.coach.ui.theme.CoachTheme
+import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String, val label: String, val icon: @Composable () -> Unit) {
     object Players : Screen("players", "Players", { Icon(Icons.Default.People, contentDescription = null) })
@@ -56,26 +60,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PlayerApp() {
     val context = LocalContext.current
-    val playerRepository = remember { PlayerRepository(context) }
+    val db = remember { AppDatabase.getDatabase(context) }
+    val playerRepository = remember { PlayerRepository(db.playerDao()) }
+    val coroutineScope = rememberCoroutineScope()
 
-    val players = remember { mutableStateListOf<Player>() }
-
-
-    LaunchedEffect(context) {
-        val migrationPrefs = context.getSharedPreferences("migration_prefs", Context.MODE_PRIVATE)
-        val needsMigration = !migrationPrefs.getBoolean("player_id_migrated_v2", false)
-
-        if (needsMigration) {
-            val oldPlayers = playerRepository.loadPlayers()
-            val newPlayers = oldPlayers.map { Player(firstName = it.firstName, lastName = it.lastName, birthYear = it.birthYear) }
-            playerRepository.savePlayers(newPlayers)
-            players.addAll(newPlayers)
-
-            migrationPrefs.edit().putBoolean("player_id_migrated_v2", true).apply()
-        } else {
-            players.addAll(playerRepository.loadPlayers())
-        }
-    }
+    val players by playerRepository.getAllPlayers().collectAsState(initial = emptyList())
 
     val navController = rememberNavController()
     val items = listOf(Screen.Players, Screen.TrainingPlans)
@@ -112,31 +101,44 @@ fun PlayerApp() {
                         PlayerListScreen(
                             players = players,
                             onAddPlayerClick = { playerNavController.navigate("addPlayer") },
-                            onDeletePlayer = {
-                                players.remove(it)
-                                playerRepository.savePlayers(players)
+                            onDeletePlayer = { player: Player ->
+                                coroutineScope.launch {
+                                    playerRepository.deletePlayer(player)
+                                }
                             },
-                            onEditPlayer = { playerNavController.navigate("editPlayer/$it") }
+                            onEditPlayer = { player: Player ->
+                                playerNavController.navigate("editPlayer/${player.id}")
+                            }
                         )
                     }
                     composable("addPlayer") {
-                        AddPlayerScreen {
-                            players.add(it)
-                            playerRepository.savePlayers(players)
-                            playerNavController.popBackStack()
+                        AddPlayerScreen { newPlayer ->
+                            coroutineScope.launch {
+                                playerRepository.addPlayer(newPlayer)
+                                playerNavController.popBackStack()
+                            }
                         }
                     }
                     composable(
-                        route = "editPlayer/{index}",
-                        arguments = listOf(navArgument("index") { type = NavType.IntType })
-                    ) {
-                        val index = it.arguments?.getInt("index") ?: -1
-                        AddPlayerScreen(players[index]) {
-                            players[index] = it
-                            playerRepository.savePlayers(players)
-                            playerNavController.popBackStack()
+                        route = "editPlayer/{playerId}",
+                        arguments = listOf(navArgument("playerId") { type = NavType.StringType })
+                    ) { backStackEntry ->
+                        val playerId = backStackEntry.arguments?.getString("playerId")
+                        val player = players.find { it.id == playerId }
+                        player?.let {
+                            AddPlayerScreen(it) { updatedPlayer ->
+                                coroutineScope.launch {
+                                    playerRepository.updatePlayer(updatedPlayer)
+                                    playerNavController.popBackStack()
+                                }
+                            }
                         }
                     }
+                }
+            }
+            composable(Screen.TrainingPlans.route) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Training Plans Screen - Not Implemented Yet")
                 }
             }
         }
@@ -147,6 +149,7 @@ fun PlayerApp() {
 @Composable
 fun DefaultPreview() {
     CoachTheme {
-        PlayerApp()
+        // Note: Preview will not show database data
+        // PlayerApp()
     }
 }

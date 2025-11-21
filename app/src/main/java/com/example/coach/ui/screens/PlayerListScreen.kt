@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -32,7 +32,7 @@ fun PlayerListScreen(
     players: List<Player>,
     onAddPlayerClick: () -> Unit,
     onDeletePlayer: (Player) -> Unit,
-    onEditPlayer: (Int) -> Unit
+    onEditPlayer: (Player) -> Unit
 ) {
     Scaffold(
         floatingActionButton = {
@@ -42,11 +42,11 @@ fun PlayerListScreen(
         }
     ) { innerPadding ->
         LazyColumn(modifier = Modifier.padding(innerPadding)) {
-            itemsIndexed(players) { index, player ->
+            items(players, key = { it.id }) { player ->
                 PlayerItem(
                     player = player,
                     onDeleteClick = { onDeletePlayer(player) },
-                    onEditClick = { onEditPlayer(index) }
+                    onEditClick = { onEditPlayer(player) }
                 )
             }
         }

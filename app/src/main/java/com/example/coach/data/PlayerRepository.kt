@@ -1,25 +1,26 @@
 package com.example.coach.data
 
-import android.content.Context
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.flow.Flow
 
-class PlayerRepository(context: Context) {
-    private val sharedPreferences = context.getSharedPreferences("player_prefs", Context.MODE_PRIVATE)
-    private val gson = Gson()
+class PlayerRepository(private val playerDao: PlayerDao) {
 
-    fun savePlayers(players: List<Player>) {
-        val json = gson.toJson(players)
-        sharedPreferences.edit().putString("players_list", json).apply()
+    fun getAllPlayers(): Flow<List<Player>> {
+        return playerDao.getAll()
     }
 
-    fun loadPlayers(): List<Player> {
-        val json = sharedPreferences.getString("players_list", null)
-        return if (json != null) {
-            val type = object : TypeToken<List<Player>>() {}.type
-            gson.fromJson(json, type)
-        } else {
-            emptyList()
-        }
+    suspend fun getPlayerById(id: String): Player? {
+        return playerDao.getById(id)
+    }
+
+    suspend fun addPlayer(player: Player) {
+        playerDao.insert(player)
+    }
+
+    suspend fun updatePlayer(player: Player) {
+        playerDao.update(player)
+    }
+
+    suspend fun deletePlayer(player: Player) {
+        playerDao.delete(player)
     }
 }
