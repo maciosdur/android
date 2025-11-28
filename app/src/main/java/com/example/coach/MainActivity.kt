@@ -33,11 +33,16 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.coach.data.AppDatabase
+import com.example.coach.data.ExerciseRepository
 import com.example.coach.data.Player
 import com.example.coach.data.PlayerRepository
+import com.example.coach.data.TrainingPlanRepository
 import com.example.coach.ui.screens.AddPlayerScreen
+import com.example.coach.ui.screens.CreateTrainingPlanScreen
 import com.example.coach.ui.screens.PlayerListScreen
+import com.example.coach.ui.screens.TrainingPlanListScreen
 import com.example.coach.ui.theme.CoachTheme
+import com.example.coach.viewmodels.ViewModelFactory
 import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String, val label: String, val icon: @Composable () -> Unit) {
@@ -61,10 +66,16 @@ class MainActivity : ComponentActivity() {
 fun PlayerApp() {
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
+
+    // Repositories
     val playerRepository = remember { PlayerRepository(db.playerDao()) }
+    val exerciseRepository = remember { ExerciseRepository(db.exerciseDao()) }
+    val trainingPlanRepository = remember { TrainingPlanRepository(db.trainingPlanDao(), db.planEntryDao()) }
+
     val coroutineScope = rememberCoroutineScope()
 
     val players by playerRepository.getAllPlayers().collectAsState(initial = emptyList())
+    val trainingPlans by trainingPlanRepository.getAllPlans().collectAsState(initial = emptyList())
 
     val navController = rememberNavController()
     val items = listOf(Screen.Players, Screen.TrainingPlans)
@@ -112,9 +123,9 @@ fun PlayerApp() {
                         )
                     }
                     composable("addPlayer") {
-                        AddPlayerScreen { newPlayer ->
+                        AddPlayerScreen {
                             coroutineScope.launch {
-                                playerRepository.addPlayer(newPlayer)
+                                playerRepository.addPlayer(it)
                                 playerNavController.popBackStack()
                             }
                         }
@@ -137,8 +148,38 @@ fun PlayerApp() {
                 }
             }
             composable(Screen.TrainingPlans.route) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Training Plans Screen - Not Implemented Yet")
+                val planNavController = rememberNavController()
+                NavHost(planNavController, startDestination = "planList") {
+                    composable("planList") {
+                        TrainingPlanListScreen(
+                            trainingPlans = trainingPlans,
+                            onAddPlanClick = { planNavController.navigate("createPlan") },
+                            onDeletePlan = {
+                                coroutineScope.launch {
+                                    trainingPlanRepository.deletePlan(it)
+                                }
+                            },
+                            onEditPlan = { plan ->
+                                planNavController.navigate("editPlan/${plan.id}")
+                            }
+                        )
+                    }
+                    composable("createPlan") {
+                        val factory = remember { ViewModelFactory(trainingPlanRepository, playerRepository, exerciseRepository) }
+                        CreateTrainingPlanScreen(factory = factory) {
+                            planNavController.popBackStack()
+                        }
+                    }
+                    composable(
+                        route = "editPlan/{planId}",
+                        arguments = listOf(navArgument("planId") { type = NavType.LongType })
+                    ) { backStackEntry ->
+                        val planId = backStackEntry.arguments?.getLong("planId")
+                        val factory = remember(planId) { ViewModelFactory(trainingPlanRepository, playerRepository, exerciseRepository, planId) }
+                        CreateTrainingPlanScreen(factory = factory) {
+                            planNavController.popBackStack()
+                        }
+                    }
                 }
             }
         }

@@ -5,9 +5,12 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [Player::class], version = 1, exportSchema = false)
+@Database(entities = [Player::class, Exercise::class, TrainingPlan::class, PlanEntry::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun playerDao(): PlayerDao
+    abstract fun exerciseDao(): ExerciseDao
+    abstract fun trainingPlanDao(): TrainingPlanDao
+    abstract fun planEntryDao(): PlanEntryDao
 
     companion object {
         @Volatile
@@ -19,7 +22,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "coach_database"
-                ).build()
+                )
+                .fallbackToDestructiveMigration() // Not for production!
+                .build()
                 INSTANCE = instance
                 instance
             }
