@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.coach.data.AvatarRepository
 import com.example.coach.data.Player
 
 @Composable
@@ -50,16 +51,19 @@ fun AddPlayerScreen(player: Player? = null, onPlayerAction: (Player) -> Unit) {
                 val year = birthYear.toIntOrNull()
                 if (firstName.isNotBlank() && lastName.isNotBlank() && year != null) {
                     val playerToSave = if (player != null) {
+                        // Editing existing player, keep the old avatar
                         player.copy(
                             firstName = firstName,
                             lastName = lastName,
                             birthYear = year
                         )
                     } else {
+                        // Creating new player, assign a random avatar
                         Player(
                             firstName = firstName,
                             lastName = lastName,
-                            birthYear = year
+                            birthYear = year,
+                            avatarResId = AvatarRepository.getRandomAvatar()
                         )
                     }
                     onPlayerAction(playerToSave)
