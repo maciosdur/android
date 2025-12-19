@@ -4,23 +4,17 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.People
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
@@ -37,10 +31,7 @@ import com.example.coach.data.ExerciseRepository
 import com.example.coach.data.Player
 import com.example.coach.data.PlayerRepository
 import com.example.coach.data.TrainingPlanRepository
-import com.example.coach.ui.screens.AddPlayerScreen
-import com.example.coach.ui.screens.CreateTrainingPlanScreen
-import com.example.coach.ui.screens.PlayerListScreen
-import com.example.coach.ui.screens.TrainingPlanListScreen
+import com.example.coach.ui.screens.*
 import com.example.coach.ui.theme.CoachTheme
 import com.example.coach.viewmodels.ViewModelFactory
 import kotlinx.coroutines.launch
@@ -62,6 +53,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerApp() {
     val context = LocalContext.current
@@ -81,6 +73,24 @@ fun PlayerApp() {
     val items = listOf(Screen.Players, Screen.TrainingPlans)
 
     Scaffold(
+        topBar = {
+            val navBackStackEntry by navController.currentBackStackEntryAsState()
+            val currentDestination = navBackStackEntry?.destination
+            TopAppBar(
+                title = { Text("Coach App") },
+                actions = {
+                    IconButton(onClick = { 
+                        if (currentDestination?.route == "tutorial") {
+                            navController.popBackStack()
+                        } else {
+                            navController.navigate("tutorial")
+                        }
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = "Tutorial")
+                    }
+                }
+            )
+        },
         bottomBar = {
             NavigationBar {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -181,6 +191,9 @@ fun PlayerApp() {
                         }
                     }
                 }
+            }
+            composable("tutorial") {
+                TutorialScreen()
             }
         }
     }
