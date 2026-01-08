@@ -17,7 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -28,53 +27,53 @@ import com.example.coach.data.Exercise
 import com.example.coach.data.Player
 
 @Composable
-fun PlayerSelectionDialog(
+fun PlayerManagementDialog(
     allPlayers: List<Player>,
-    onConfirm: (List<Player>) -> Unit,
+    playersInPlan: List<Player>,
+    onPlayerToggled: (player: Player, isInPlan: Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val selectedPlayers = remember { mutableStateListOf<Player>() }
+    val playersInPlanIds = remember(playersInPlan) { playersInPlan.map { it.id }.toSet() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Wybierz zawodników") },
+        title = { Text("Zarządzaj zawodnikami w planie") },
         text = {
             LazyColumn {
-                items(allPlayers) { player ->
+                items(allPlayers, key = { it.id }) { player ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().clickable { 
-                             if (player in selectedPlayers) selectedPlayers.remove(player) else selectedPlayers.add(player)
-                        }
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPlayerToggled(player, player.id !in playersInPlanIds) }
                     ) {
                         Checkbox(
-                            checked = player in selectedPlayers,
-                            onCheckedChange = { isChecked ->
-                                if (isChecked) selectedPlayers.add(player) else selectedPlayers.remove(player)
-                            }
+                            checked = player.id in playersInPlanIds,
+                            onCheckedChange = { isChecked -> onPlayerToggled(player, isChecked) }
                         )
                         Text(text = "${player.firstName} ${player.lastName}")
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(selectedPlayers.toList()) }) { Text("OK") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Zamknij") } }
     )
 }
 
 @Composable
-fun ExerciseSelectionDialog(
-    historicalExercises: List<Exercise>,
-    onExerciseSelected: (Exercise) -> Unit, // Returns the full object
-    onAddNewExercise: (String) -> Unit, // For creating a new one
+fun ExerciseManagementDialog(
+    allExercises: List<Exercise>,
+    exercisesInPlan: List<Exercise>,
+    onExerciseToggled: (exercise: Exercise, isInPlan: Boolean) -> Unit,
+    onAddNewExercise: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var newExerciseName by remember { mutableStateOf("") }
+    val exercisesInPlanIds = remember(exercisesInPlan) { exercisesInPlan.map { it.id }.toSet() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Wybierz lub dodaj ćwiczenie") },
+        title = { Text("Zarządzaj ćwiczeniami") },
         text = {
             Column {
                 OutlinedTextField(
@@ -87,27 +86,36 @@ fun ExerciseSelectionDialog(
                     onClick = {
                         if (newExerciseName.isNotBlank()) {
                             onAddNewExercise(newExerciseName)
+                            newExerciseName = ""
                         }
                     },
                     modifier = Modifier.padding(top = 8.dp)
                 ) {
-                    Text("Dodaj nowe")
+                    Text("Dodaj do biblioteki i planu")
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Lub wybierz z listy:")
+                Text("Zaznacz, aby dodać/usunąć z planu:")
                 LazyColumn {
-                    items(historicalExercises) { exercise ->
-                        Text(
-                            text = exercise.name,
-                            modifier = Modifier.fillMaxWidth().clickable { onExerciseSelected(exercise) }.padding(vertical = 8.dp)
-                        )
+                    items(allExercises, key = { it.id }) { exercise ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onExerciseToggled(exercise, exercise.id !in exercisesInPlanIds) }
+                        ) {
+                            Checkbox(
+                                checked = exercise.id in exercisesInPlanIds,
+                                onCheckedChange = { isChecked -> onExerciseToggled(exercise, isChecked) }
+                            )
+                            Text(text = exercise.name, modifier = Modifier.weight(1f))
+                        }
                     }
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Anuluj")
+                Text("Zamknij")
             }
         }
     )

@@ -23,8 +23,12 @@ class TrainingPlanRepository(private val trainingPlanDao: TrainingPlanDao, priva
     suspend fun deletePlan(plan: TrainingPlan) {
         trainingPlanDao.delete(plan)
     }
-
+    
     suspend fun savePlanEntries(entries: List<PlanEntry>) {
         planEntryDao.insertAll(entries)
+    }
+
+    suspend fun findLastEntry(playerId: String, exerciseId: Long): PlanEntry? {
+        return planEntryDao.findLastEntry(playerId, exerciseId)
     }
 }

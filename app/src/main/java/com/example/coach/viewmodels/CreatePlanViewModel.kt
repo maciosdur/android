@@ -12,14 +12,14 @@ import com.example.coach.data.TrainingPlanRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+// A column now represents a SINGLE player
 data class PlayerColumn(
-    val players: List<Player>,
-    val entries: Map<Long, GridCell>
+    val player: Player,
+    val entries: Map<Long, GridCell> // Key: exercise.id
 )
 
 data class GridCell(
@@ -67,43 +67,89 @@ class CreatePlanViewModel(
     private suspend fun loadPlanForEditing(planId: Long) {
         val plan = planRepository.getPlanById(planId) ?: return
         val entries = planRepository.getEntriesForPlan(planId).first()
-        
-        val exercisesInPlan = entries.map { entry ->
+
+        val exercisesInPlan = entries.mapNotNull { entry ->
             _uiState.value.allExercises.find { it.id == entry.exerciseId }
-        }.filterNotNull().distinctBy { it.id }
+        }.distinctBy { it.id }
 
-        val playerColumns = entries.groupBy { entry -> entry.playerId }
-            .map { (playerId, playerEntries) ->
-                val player = _uiState.value.allPlayers.find { it.id == playerId }!!
-                val cellMap = playerEntries.associate {
-                    it.exerciseId to GridCell(it.sets, it.reps, it.weight)
-                }
-                PlayerColumn(players = listOf(player), entries = cellMap)
-            }
-        
+        val playerColumns = entries.groupBy { it.playerId }.map { (playerId, playerEntries) ->
+            val player = _uiState.value.allPlayers.find { it.id == playerId }!!
+            val cellMap = playerEntries.associate { it.exerciseId to GridCell(it.sets, it.reps, it.weight) }
+            PlayerColumn(player = player, entries = cellMap)
+        }
+
         _uiState.update {
-            it.copy(
-                plan = plan,
-                exercisesInPlan = exercisesInPlan,
-                playerColumns = playerColumns,
-                isLoading = false
-            )
+            it.copy(plan = plan, exercisesInPlan = exercisesInPlan, playerColumns = playerColumns, isLoading = false)
         }
     }
 
-    fun addNewExerciseToLibrary(name: String) {
+    fun onPlanNameChange(name: String) {
+        _uiState.update { it.copy(plan = it.plan.copy(name = name)) }
+    }
+
+    // --- Exercise Management ---
+    fun addNewExerciseToLibrary(name: String, andToggleInPlan: Boolean = false) {
         viewModelScope.launch {
-            val newExercise = Exercise(name = name)
-            exerciseRepository.addExercise(newExercise)
-            val addedExercise = exerciseRepository.getAllExercises().first().last { it.name == name }
-            addExerciseToPlan(addedExercise)
+            exerciseRepository.addExercise(Exercise(name = name))
+            if (andToggleInPlan) {
+                // After adding, find it and toggle it into the plan
+                val addedExercise = exerciseRepository.getAllExercises().first().last { it.name == name }
+                toggleExerciseInPlan(addedExercise, true)
+            }
         }
     }
 
-    fun addExerciseToPlan(exercise: Exercise) {
+    fun toggleExerciseInPlan(exercise: Exercise, isInPlan: Boolean) {
+        if (isInPlan) {
+            viewModelScope.launch {
+                val updatedColumns = _uiState.value.playerColumns.map { column ->
+                    val newEntries = column.entries.toMutableMap()
+                    val lastEntry = planRepository.findLastEntry(column.player.id, exercise.id)
+                    if (lastEntry != null) {
+                        newEntries[exercise.id] = GridCell(lastEntry.sets, lastEntry.reps, lastEntry.weight)
+                    }
+                    column.copy(entries = newEntries)
+                }
+                _uiState.update {
+                    if (it.exercisesInPlan.any { ex -> ex.id == exercise.id }) return@update it // Avoid duplicates
+                    it.copy(exercisesInPlan = it.exercisesInPlan + exercise, playerColumns = updatedColumns)
+                }
+            }
+        } else {
+            _uiState.update {
+                it.copy(exercisesInPlan = it.exercisesInPlan.filterNot { ex -> ex.id == exercise.id })
+            }
+        }
+    }
+
+    // --- Player Management ---
+    fun togglePlayerInPlan(player: Player, isInPlan: Boolean) {
+        if (isInPlan) {
+            viewModelScope.launch {
+                val newEntries = mutableMapOf<Long, GridCell>()
+                _uiState.value.exercisesInPlan.forEach { exercise ->
+                    val lastEntry = planRepository.findLastEntry(player.id, exercise.id)
+                    if (lastEntry != null) {
+                        newEntries[exercise.id] = GridCell(lastEntry.sets, lastEntry.reps, lastEntry.weight)
+                    }
+                }
+                val newColumn = PlayerColumn(player = player, entries = newEntries)
+                _uiState.update {
+                    if (it.playerColumns.any { c -> c.player.id == player.id }) return@update it
+                    it.copy(playerColumns = it.playerColumns + newColumn)
+                }
+            }
+        } else {
+            _uiState.update {
+                it.copy(playerColumns = it.playerColumns.filterNot { col -> col.player.id == player.id })
+            }
+        }
+    }
+    
+    fun removePlayerColumnFromPlan(index: Int) {
         _uiState.update {
-            if (it.exercisesInPlan.any { ex -> ex.id == exercise.id }) return@update it // Avoid duplicates
-            it.copy(exercisesInPlan = it.exercisesInPlan + exercise)
+            val updatedColumns = it.playerColumns.toMutableList().apply { removeAt(index) }
+            it.copy(playerColumns = updatedColumns)
         }
     }
 
@@ -113,22 +159,7 @@ class CreatePlanViewModel(
         }
     }
 
-    fun addPlayerColumn(players: List<Player>) {
-        val newColumn = PlayerColumn(players = players, entries = emptyMap())
-        _uiState.update {
-            it.copy(playerColumns = it.playerColumns + newColumn)
-        }
-    }
-
-    fun removePlayerColumn(index: Int) {
-        _uiState.update {
-            val updatedColumns = it.playerColumns.toMutableList().apply {
-                removeAt(index)
-            }
-            it.copy(playerColumns = updatedColumns)
-        }
-    }
-
+    // --- Grid Management ---
     fun updateCell(columnIndex: Int, exerciseId: Long, newCell: GridCell) {
         _uiState.update {
             val updatedColumns = it.playerColumns.toMutableList()
@@ -140,38 +171,20 @@ class CreatePlanViewModel(
         }
     }
 
-    fun onPlanNameChange(name: String) {
-        _uiState.update {
-            it.copy(plan = it.plan.copy(name = name))
-        }
-    }
-
     fun savePlan() {
         viewModelScope.launch {
             val currentPlan = _uiState.value.plan
             val planIdToSave = if (currentPlan.id != 0L) currentPlan.id else planRepository.addPlan(currentPlan)
-
             val entriesToSave = mutableListOf<PlanEntry>()
             _uiState.value.playerColumns.forEach { column ->
-                column.players.forEach { player ->
-                    _uiState.value.exercisesInPlan.forEach { exercise ->
-                        val cell = column.entries[exercise.id] ?: GridCell()
-                        entriesToSave.add(
-                            PlanEntry(
-                                planId = planIdToSave,
-                                playerId = player.id,
-                                exerciseId = exercise.id,
-                                sets = cell.sets,
-                                reps = cell.reps,
-                                weight = cell.weight
-                            )
-                        )
-                    }
+                _uiState.value.exercisesInPlan.forEach { exercise ->
+                    val cell = column.entries[exercise.id] ?: GridCell()
+                    entriesToSave.add(
+                        PlanEntry(planIdToSave, column.player.id, exercise.id, cell.sets, cell.reps, cell.weight)
+                    )
                 }
             }
-
             planRepository.savePlanEntries(entriesToSave)
-
             _uiState.update { it.copy(isFinished = true) }
         }
     }
