@@ -31,4 +31,8 @@ class TrainingPlanRepository(private val trainingPlanDao: TrainingPlanDao, priva
     suspend fun findLastEntry(playerId: String, exerciseId: Long): PlanEntry? {
         return planEntryDao.findLastEntry(playerId, exerciseId)
     }
+
+    suspend fun updatePlan(plan: TrainingPlan) {
+        trainingPlanDao.update(plan)
+    }
 }

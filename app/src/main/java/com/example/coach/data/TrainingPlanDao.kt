@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -20,4 +21,7 @@ interface TrainingPlanDao {
 
     @Delete
     suspend fun delete(plan: TrainingPlan)
+
+    @Update
+    suspend fun update(trainingPlan: TrainingPlan)
 }

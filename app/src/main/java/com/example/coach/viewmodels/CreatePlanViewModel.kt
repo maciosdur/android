@@ -16,10 +16,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// A column now represents a SINGLE player
 data class PlayerColumn(
     val player: Player,
-    val entries: Map<Long, GridCell> // Key: exercise.id
+    val entries: Map<Long, GridCell>
 )
 
 data class GridCell(
@@ -92,7 +91,6 @@ class CreatePlanViewModel(
         viewModelScope.launch {
             exerciseRepository.addExercise(Exercise(name = name))
             if (andToggleInPlan) {
-                // After adding, find it and toggle it into the plan
                 val addedExercise = exerciseRepository.getAllExercises().first().last { it.name == name }
                 toggleExerciseInPlan(addedExercise, true)
             }
@@ -174,7 +172,13 @@ class CreatePlanViewModel(
     fun savePlan() {
         viewModelScope.launch {
             val currentPlan = _uiState.value.plan
-            val planIdToSave = if (currentPlan.id != 0L) currentPlan.id else planRepository.addPlan(currentPlan)
+            val planIdToSave = if (currentPlan.id != 0L) {
+                planRepository.updatePlan(currentPlan)
+                currentPlan.id
+            } else {
+                planRepository.addPlan(currentPlan)
+            }
+
             val entriesToSave = mutableListOf<PlanEntry>()
             _uiState.value.playerColumns.forEach { column ->
                 _uiState.value.exercisesInPlan.forEach { exercise ->
